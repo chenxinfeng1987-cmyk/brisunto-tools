@@ -1,0 +1,26 @@
+name: Shopee Order Sync
+
+on:
+  schedule:
+    - cron: "0 11 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call sync endpoint
+        run: |
+          curl -s -X POST "https://brisunto2026.pythonanywhere.com/api/sync-shopee/run" \
+            -H "X-Sync-Token: ${{ secrets.SHOPEE_SYNC_TOKEN }}" \
+            -o sync_result.json
+          cat sync_result.json
+      - name: Check result
+        run: |
+          if grep -q '"ok": true' sync_result.json; then
+            echo "Sync completed successfully"
+          else
+            echo "Sync failed"
+            cat sync_result.json
+            exit 1
+          fi

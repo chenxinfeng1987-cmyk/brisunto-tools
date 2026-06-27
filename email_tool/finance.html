@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>财务管理 - Brisunto</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,'Microsoft YaHei',sans-serif;background:#f0f2f5;padding:16px;color:#333}
+.header{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.header h1{font-size:20px;color:#1890ff}
+.header button{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:13px}
+.btn-back{background:#722ed1;color:#fff}
+.btn-add{background:#52c41a;color:#fff;margin-left:auto}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:16px}
+.stat-card{background:#fff;border-radius:8px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,0.08)}
+.stat-card h3{font-size:13px;color:#888;margin-bottom:4px}
+.stat-card .num{font-size:22px;font-weight:bold}
+.income{color:#52c41a}
+.expense{color:#ff4d4f}
+.balance{color:#1890ff}
+.platform-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:16px}
+.plat-card{background:#fff;border-radius:8px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,0.08)}
+.plat-card h3{font-size:14px;margin-bottom:8px;color:#333}
+.plat-card .row{display:flex;justify-content:space-between;font-size:13px;padding:3px 0}
+.plat-card .row .label{color:#888}
+.tabs{display:flex;gap:8px;margin-bottom:12px}
+.tabs button{padding:8px 20px;border:1px solid #d9d9d9;background:#fff;border-radius:6px;cursor:pointer;font-size:13px}
+.tabs button.active{background:#1890ff;color:#fff;border-color:#1890ff}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08)}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #f0f0f0;font-size:13px}
+th{background:#fafafa;font-weight:600;color:#555;position:sticky;top:0}
+tr:hover{background:#f5f5f5}
+.filters{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+.filters select,.filters input{padding:6px 10px;border:1px solid #d9d9d9;border-radius:4px;font-size:13px}
+.filters button{padding:6px 14px;background:#1890ff;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px}
+.tag{padding:2px 8px;border-radius:4px;font-size:11px;color:#fff}
+.tag-income{background:#52c41a}
+.tag-expense{background:#ff4d4f}
+.tag-shopee{background:#ee4d2d}
+.tag-aliexpress{background:#ff6a00}
+.tag-pdd{background:#e02e24}
+.tag-1688{background:#ff6a00}
+.tag-taobao{background:#ff6a00}
+.tag-other{background:#888}
+.del-btn{background:none;border:none;color:#ff4d4f;cursor:pointer;font-size:14px;padding:2px 6px}
+.del-btn:hover{background:#fff1f0;border-radius:4px}
+.modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center}
+.modal.show{display:flex}
+.modal-content{background:#fff;border-radius:12px;padding:24px;width:90%;max-width:500px;max-height:90vh;overflow-y:auto}
+.modal-content h2{margin-bottom:16px;font-size:18px}
+.form-group{margin-bottom:12px}
+.form-group label{display:block;font-size:13px;color:#666;margin-bottom:4px}
+.form-group input,.form-group select{width:100%;padding:8px 10px;border:1px solid #d9d9d9;border-radius:4px;font-size:14px;outline:none}
+.form-group input:focus,.form-group select:focus{border-color:#1890ff;box-shadow:0 0 0 2px rgba(24,144,255,0.2)}
+.form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.form-actions button{padding:8px 20px;border-radius:4px;cursor:pointer;font-size:14px;border:none}
+.btn-primary{background:#1890ff;color:#fff}
+.btn-cancel{background:#fff;color:#666;border:1px solid #d9d9d9}
+.empty{text-align:center;padding:40px;color:#999;font-size:14px}
+@media(max-width:600px){
+  .stats-grid{grid-template-columns:1fr}
+  .platform-grid{grid-template-columns:1fr}
+  th,td{padding:6px 8px;font-size:12px}
+}
+</style>
+</head>
+<body>
+<div class="header">
+  <button class="btn-back" onclick="location.replace('/')">&larr; 返回</button>
+  <h1>财务管理</h1>
+  <button class="btn-add" onclick="showAddModal()">+ 记账</button>
+</div>
+
+<!-- Summary -->
+<div class="stats-grid">
+  <div class="stat-card"><h3>总收入</h3><div class="num income" id="total-income">0.00</div></div>
+  <div class="stat-card"><h3>总支出</h3><div class="num expense" id="total-expense">0.00</div></div>
+  <div class="stat-card"><h3>结余</h3><div class="num balance" id="total-balance">0.00</div></div>
+</div>
+
+<!-- Per platform -->
+<div class="platform-grid" id="platform-stats"></div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="active" onclick="switchTab('ledger',this)">流水账</button>
+  <button onclick="switchTab('sales',this)">销售记录</button>
+</div>
+
+<!-- Filters -->
+<div class="filters" id="filter-bar">
+  <select id="filter-type"><option value="">全部类型</option><option value="income">收入</option><option value="expense">支出</option></select>
+  <select id="filter-platform"><option value="">全部平台</option></select>
+  <select id="filter-category"><option value="">全部类别</option><option value="sales">销售收入</option><option value="shipping">运费</option><option value="procurement">采购</option><option value="other">其他</option></select>
+  <input type="date" id="filter-date-from" placeholder="开始日期">
+  <input type="date" id="filter-date-to" placeholder="结束日期">
+  <button onclick="loadLedger()">筛选</button>
+</div>
+
+<!-- Ledger Table -->
+<div id="ledger-section">
+  <table><thead><tr>
+    <th>日期</th><th>类型</th><th>平台</th><th>类别</th><th>金额</th><th>订单号</th><th>备注</th><th style="width:40px"></th>
+  </tr></thead><tbody id="ledger-body"></tbody></table>
+</div>
+
+<!-- Sales Table -->
+<div id="sales-section" style="display:none">
+  <div class="filters">
+    <select id="sales-platform"><option value="">全部平台</option></select>
+    <input type="text" id="sales-search" placeholder="搜索货号/订单号" style="flex:1">
+    <button onclick="loadSales()">筛选</button>
+  </div>
+  <table><thead><tr>
+    <th>日期</th><th>平台</th><th>订单号</th><th>货号</th><th>品名</th><th>数量</th><th>单价</th><th>总金额</th><th style="width:40px"></th>
+  </tr></thead><tbody id="sales-body"></tbody></table>
+</div>
+
+<!-- Add Entry Modal -->
+<div class="modal" id="add-modal">
+  <div class="modal-content">
+    <h2>记账</h2>
+    <div class="form-group">
+      <label>类型</label>
+      <select id="entry-type"><option value="income">收入</option><option value="expense">支出</option></select>
+    </div>
+    <div class="form-group">
+      <label>平台</label>
+      <select id="entry-platform"></select>
+    </div>
+    <div class="form-group">
+      <label>类别</label>
+      <select id="entry-category"><option value="sales">销售收入</option><option value="shipping">运费</option><option value="procurement">采购</option><option value="other">其他</option></select>
+    </div>
+    <div class="form-group">
+      <label>金额 (¥)</label>
+      <input type="number" id="entry-amount" step="0.01" required>
+    </div>
+    <div class="form-group">
+      <label>日期</label>
+      <input type="date" id="entry-date">
+    </div>
+    <div class="form-group">
+      <label>订单号 (可选)</label>
+      <input type="text" id="entry-order-id" placeholder="关联订单号">
+    </div>
+    <div class="form-group">
+      <label>备注</label>
+      <input type="text" id="entry-note" placeholder="备注信息">
+    </div>
+    <div class="form-actions">
+      <button class="btn-cancel" onclick="closeModal()">取消</button>
+      <button class="btn-primary" onclick="saveEntry()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let PLATFORMS = ["shopee","aliexpress","pdd","1688","taobao","other"];
+
+function init() {
+  let sel = document.getElementById("entry-platform");
+  PLATFORMS.forEach(p => {
+    sel.innerHTML += `<option value="${p}">${pLabels[p]||p}</option>`;
+  });
+  document.getElementById("filter-platform").innerHTML = '<option value="">全部平台</option>' + sel.innerHTML;
+  document.getElementById("sales-platform").innerHTML = '<option value="">全部平台</option>' + sel.innerHTML;
+  document.getElementById("entry-date").value = new Date().toISOString().slice(0,10);
+  loadLedger();
+}
+
+const pLabels = {shopee:"Shopee",aliexpress:"速卖通",pdd:"拼多多","1688":"1688",taobao:"淘宝",other:"其他"};
+
+async function loadLedger() {
+  let params = new URLSearchParams({
+    type: document.getElementById("filter-type").value,
+    platform: document.getElementById("filter-platform").value,
+    category: document.getElementById("filter-category").value,
+    date_from: document.getElementById("filter-date-from").value,
+    date_to: document.getElementById("filter-date-to").value,
+  });
+  let r = await fetch("/api/finance/ledger?" + params);
+  let data = await r.json();
+  renderLedger(data.ledger);
+  renderStats(data.stats);
+}
+
+function renderLedger(ledger) {
+  let tbody = document.getElementById("ledger-body");
+  if (!ledger.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">暂无记录</td></tr>';
+    return;
+  }
+  tbody.innerHTML = ledger.map(e => `<tr>
+    <td>${e.date}</td>
+    <td><span class="tag tag-${e.type}">${e.type==="income"?"收入":"支出"}</span></td>
+    <td><span class="tag tag-${e.platform}">${pLabels[e.platform]||e.platform}</span></td>
+    <td>${catLabels[e.category]||e.category}</td>
+    <td style="color:${e.type==="income"?"#52c41a":"#ff4d4f"};font-weight:bold">¥${e.amount.toFixed(2)}</td>
+    <td>${e.order_id||"-"}</td>
+    <td>${e.note||""}</td>
+    <td><button class="del-btn" onclick="deleteEntry(${e.id})">✕</button></td>
+  </tr>`).join("");
+}
+
+const catLabels = {sales:"销售收入",shipping:"运费",procurement:"采购",other:"其他"};
+
+function renderStats(stats) {
+  document.getElementById("total-income").textContent = "¥" + stats.income_total.toFixed(2);
+  document.getElementById("total-expense").textContent = "¥" + stats.expense_total.toFixed(2);
+  document.getElementById("total-balance").textContent = "¥" + stats.balance.toFixed(2);
+  let grid = document.getElementById("platform-stats");
+  grid.innerHTML = PLATFORMS.map(p => {
+    let d = stats.by_platform[p]||{};
+    return `<div class="plat-card"><h3>${pLabels[p]||p}</h3>
+      <div class="row"><span class="label">收入</span><span style="color:#52c41a">¥${(d.income||0).toFixed(2)}</span></div>
+      <div class="row"><span class="label">运费</span><span style="color:#ff4d4f">¥${(d.shipping||0).toFixed(2)}</span></div>
+      <div class="row"><span class="label">采购</span><span style="color:#ff4d4f">¥${(d.procurement||0).toFixed(2)}</span></div>
+      <div class="row"><span class="label">合计支出</span><span style="color:#ff4d4f">¥${(d.expense||0).toFixed(2)}</span></div>
+      <div class="row"><span class="label" style="font-weight:bold">利润</span><span style="color:${(d.income||0)-(d.expense||0)>=0?"#52c41a":"#ff4d4f"};font-weight:bold">¥${((d.income||0)-(d.expense||0)).toFixed(2)}</span></div>
+    </div>`;
+  }).join("");
+}
+
+async function loadSales() {
+  let params = new URLSearchParams({
+    platform: document.getElementById("sales-platform").value,
+    search: document.getElementById("sales-search").value,
+  });
+  let r = await fetch("/api/finance/sales?" + params);
+  let data = await r.json();
+  let tbody = document.getElementById("sales-body");
+  if (!data.sales.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="empty">暂无销售记录</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.sales.map(s => `<tr>
+    <td>${s.date}</td>
+    <td><span class="tag tag-${s.platform}">${pLabels[s.platform]||s.platform}</span></td>
+    <td>${s.order_id||"-"}</td>
+    <td>${s.item||"-"}</td>
+    <td>${s.name||"-"}</td>
+    <td>${s.qty}</td>
+    <td>${s.unit_price?"¥"+s.unit_price.toFixed(2):"-"}</td>
+    <td style="color:#52c41a;font-weight:bold">¥${s.total.toFixed(2)}</td>
+    <td><button class="del-btn" onclick="deleteSale(${s.id})">✕</button></td>
+  </tr>`).join("");
+}
+
+function switchTab(tab, btn) {
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  document.getElementById("ledger-section").style.display = tab === "ledger" ? "" : "none";
+  document.getElementById("sales-section").style.display = tab === "sales" ? "" : "none";
+  document.getElementById("filter-bar").style.display = tab === "ledger" ? "" : "none";
+  if (tab === "ledger") loadLedger();
+  else loadSales();
+}
+
+function showAddModal() {
+  document.getElementById("add-modal").classList.add("show");
+}
+
+function closeModal() {
+  document.getElementById("add-modal").classList.remove("show");
+}
+
+async function saveEntry() {
+  let data = {
+    type: document.getElementById("entry-type").value,
+    platform: document.getElementById("entry-platform").value,
+    category: document.getElementById("entry-category").value,
+    amount: parseFloat(document.getElementById("entry-amount").value),
+    date: document.getElementById("entry-date").value,
+    order_id: document.getElementById("entry-order-id").value,
+    note: document.getElementById("entry-note").value,
+  };
+  if (!data.amount || data.amount <= 0) { alert("请输入有效金额"); return; }
+  let r = await fetch("/api/finance/ledger", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(data)});
+  let res = await r.json();
+  if (res.ok) {
+    closeModal();
+    document.getElementById("entry-amount").value = "";
+    document.getElementById("entry-order-id").value = "";
+    document.getElementById("entry-note").value = "";
+    loadLedger();
+  } else {
+    alert(res.error || "保存失败");
+  }
+}
+
+async function deleteEntry(id) {
+  if (!confirm("确定删除此记录？")) return;
+  let r = await fetch("/api/finance/ledger/delete", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({id})});
+  let res = await r.json();
+  if (res.ok) loadLedger();
+  else alert(res.error);
+}
+
+async function deleteSale(id) {
+  if (!confirm("确定删除此销售记录？")) return;
+  let r = await fetch("/api/finance/sales/delete", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({id})});
+  let res = await r.json();
+  if (res.ok) loadSales();
+  else alert(res.error);
+}
+
+init();
+</script>
+</body>
+</html>
