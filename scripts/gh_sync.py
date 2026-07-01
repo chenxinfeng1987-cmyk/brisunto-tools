@@ -47,13 +47,14 @@ def pa_delete(path):
     requests.delete(f"https://www.pythonanywhere.com/api/v0/user/{PA_USER}/files/path/{path}",
                     headers={"Authorization": f"Token {PA_TOKEN}"}, timeout=10)
 
-def fetch_orders():
+def fetch_orders(from_ts=None):
     now_cn = datetime.now(CN_TZ)
-    today_start = int(now_cn.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+    if from_ts is None:
+        from_ts = int(now_cn.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
     now_ts = int(now_cn.timestamp())
     resp = call_api("order/get_order_list", {
         "order_status": "COMPLETED",
-        "create_time_from": today_start,
+        "create_time_from": from_ts,
         "create_time_to": now_ts,
         "page_size": 100,
         "page_number": 1,
@@ -103,6 +104,18 @@ def main():
         return False
     print(f"Trigger found: {trigger_raw[:100]}")
 
+    # Download last_sync.json to determine time range
+    last_raw = pa_download("inventory/last_sync.json")
+    last_until = None
+    if last_raw:
+        try:
+            last_until = json.loads(last_raw).get("synced_until")
+        except: pass
+    now_cn = datetime.now(CN_TZ)
+    midnight_today = int(now_cn.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+    from_ts = max(last_until, midnight_today) if last_until else midnight_today
+    print(f"Syncing orders from {datetime.fromtimestamp(from_ts, CN_TZ).strftime('%Y-%m-%d %H:%M:%S')}")
+
     # Download products.json
     products_raw = pa_download("inventory/static/products.json")
     if not products_raw:
@@ -111,12 +124,13 @@ def main():
     products = json.loads(products_raw)
     print(f"Loaded {len(products)} products")
 
-    # Fetch orders
-    orders, err = fetch_orders()
+    # Fetch orders since last sync
+    orders, err = fetch_orders(from_ts)
     if err:
         print(f"Sync aborted: {err}")
         return False
     if not orders:
+        pa_upload("inventory/last_sync.json", json.dumps({"synced_until": int(datetime.now(CN_TZ).timestamp())}))
         pa_delete("inventory/sync_trigger.json")
         print("No orders today - nothing to sync")
         return True
@@ -138,6 +152,7 @@ def main():
 
     if not sku_qty:
         print("No processable SKUs")
+        pa_upload("inventory/last_sync.json", json.dumps({"synced_until": int(datetime.now(CN_TZ).timestamp())}))
         pa_delete("inventory/sync_trigger.json")
         return True
 
@@ -168,7 +183,8 @@ def main():
                            "name": sku_details.get(sku, "")}
     update_report(items_data, products, today.year, today.month)
 
-    # Delete trigger
+    # Save last sync time, delete trigger
+    pa_upload("inventory/last_sync.json", json.dumps({"synced_until": int(datetime.now(CN_TZ).timestamp())}))
     pa_delete("inventory/sync_trigger.json")
     print("Sync complete!")
     return True
