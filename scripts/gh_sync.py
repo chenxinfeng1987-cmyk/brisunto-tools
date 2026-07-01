@@ -147,7 +147,7 @@ def main():
             sold = sku_qty[item_sku]
             old_stock = p.get("stock", 0)
             try:
-                new_stock = max(0, int(old_stock) - sold)
+                new_stock = int(old_stock) - sold
             except (ValueError, TypeError):
                 new_stock = 0
             p["stock"] = new_stock
