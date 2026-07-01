@@ -4,7 +4,8 @@ Triggered by sync_trigger.json on PA or scheduled.
 Downloads products.json from PA, runs sync, uploads changed files back.
 """
 import sys, os, json, time, hashlib, hmac, requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+CN_TZ = timezone(timedelta(hours=8))  # China time
 from collections import defaultdict
 
 # === Credentials ===
@@ -47,12 +48,13 @@ def pa_delete(path):
                     headers={"Authorization": f"Token {PA_TOKEN}"}, timeout=10)
 
 def fetch_orders():
-    now = int(time.time())
-    today_start = int(datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+    now_cn = datetime.now(CN_TZ)
+    today_start = int(now_cn.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+    now_ts = int(now_cn.timestamp())
     resp = call_api("order/get_order_list", {
         "order_status": "COMPLETED",
         "create_time_from": today_start,
-        "create_time_to": now,
+        "create_time_to": now_ts,
         "page_size": 100,
         "page_number": 1,
     })
@@ -155,7 +157,7 @@ def main():
             print(f"  {item_sku}: {old_stock} → {new_stock} (-{sold})")
 
     # Upload products.json
-    today = datetime.now()
+    today = datetime.now(CN_TZ)
     pa_upload("inventory/static/products.json", json.dumps(products, ensure_ascii=False, indent=2))
     print(f"Uploaded products.json ({updated} SKUs updated)")
 
