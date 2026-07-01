@@ -1,26 +1,24 @@
-name: Shopee Order Sync
+name: Shopee Sync
 
 on:
   schedule:
-    - cron: "0 11 * * *"
+    - cron: "*/30 * * * *"
   workflow_dispatch:
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Call sync endpoint
-        run: |
-          curl -s -X POST "https://brisunto2026.pythonanywhere.com/api/sync-shopee/run" \
-            -H "X-Sync-Token: ${{ secrets.SHOPEE_SYNC_TOKEN }}" \
-            -o sync_result.json
-          cat sync_result.json
-      - name: Check result
-        run: |
-          if grep -q '"ok": true' sync_result.json; then
-            echo "Sync completed successfully"
-          else
-            echo "Sync failed"
-            cat sync_result.json
-            exit 1
-          fi
+      - uses: actions/checkout@v4
+
+      - name: Install deps
+        run: pip install requests
+
+      - name: Run sync
+        env:
+          PA_API_TOKEN: ${{ secrets.PA_API_TOKEN }}
+          SHOPEE_PARTNER_ID: ${{ secrets.SHOPEE_PARTNER_ID }}
+          SHOPEE_PARTNER_KEY: ${{ secrets.SHOPEE_PARTNER_KEY }}
+          SHOPEE_ACCESS_TOKEN: ${{ secrets.SHOPEE_ACCESS_TOKEN }}
+          SHOPEE_SHOP_ID: ${{ secrets.SHOPEE_SHOP_ID }}
+        run: python scripts/gh_sync.py
