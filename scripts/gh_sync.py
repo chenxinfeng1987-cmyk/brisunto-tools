@@ -96,13 +96,19 @@ def update_report(items_data, products, year, month):
     pa_upload(f"sales_{ym}.csv", "\n".join(lines))
     print(f"  Report sales_{ym}.csv updated")
 
-def main():
-    # Check trigger
-    trigger_raw = pa_download("inventory/sync_trigger.json")
-    if not trigger_raw:
-        print("No trigger file found.")
-        return False
-    print(f"Trigger found: {trigger_raw[:100]}")
+def main(force=False):
+    # Check trigger (skip if force mode)
+    if not force:
+        trigger_raw = pa_download("inventory/sync_trigger.json")
+        if not trigger_raw:
+            print("No trigger file found.")
+            return False
+        print(f"Trigger found: {trigger_raw[:100]}")
+    else:
+        print("Force mode: running sync directly")
+        # Clean up stale trigger if present
+        if pa_download("inventory/sync_trigger.json"):
+            pa_delete("inventory/sync_trigger.json")
 
     # Download last_sync.json to determine time range
     last_raw = pa_download("inventory/last_sync.json")
@@ -190,5 +196,6 @@ def main():
     return True
 
 if __name__ == "__main__":
-    success = main()
+    force = "--force" in sys.argv
+    success = main(force=force)
     sys.exit(0 if success else 1)
