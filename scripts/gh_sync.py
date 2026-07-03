@@ -85,27 +85,26 @@ def main():
     if not synced:
         print("No previous sync history, will process all orders")
 
-    print(f"Fetching READY_TO_SHIP orders (last {LOOKBACK_DAYS} days)...")
-    cursor = ""
     new_orders = []
+    for status in ["READY_TO_SHIP", "PROCESSED", "SHIPPED"]:
+        cursor = ""
+        while True:
+            resp = call_api("order/get_order_list", {
+                "order_status": status, "time_range_field": "create_time",
+                "time_from": ts_from, "time_to": ts_to, "page_size": 100, "cursor": cursor
+            })
+            if resp.get("error"):
+                print(f"API error ({status}): {resp['error']} - {resp.get('message', '')}")
+                return False
 
-    while True:
-        resp = call_api("order/get_order_list", {
-            "order_status": "READY_TO_SHIP", "time_range_field": "create_time",
-            "time_from": ts_from, "time_to": ts_to, "page_size": 100, "cursor": cursor
-        })
-        if resp.get("error"):
-            print(f"API error: {resp['error']} - {resp.get('message', '')}")
-            return False
-
-        orders = resp.get("response", {}).get("order_list", [])
-        for o in orders:
-            sn = o.get("order_sn")
-            if sn and sn not in synced:
-                new_orders.append(o)
-        cursor = resp.get("response", {}).get("next_cursor", "")
-        if not cursor or not orders:
-            break
+            orders = resp.get("response", {}).get("order_list", [])
+            for o in orders:
+                sn = o.get("order_sn")
+                if sn and sn not in synced:
+                    new_orders.append(o)
+            cursor = resp.get("response", {}).get("next_cursor", "")
+            if not cursor or not orders:
+                break
 
     print(f"Found {len(new_orders)} new orders to process")
     if not new_orders:
