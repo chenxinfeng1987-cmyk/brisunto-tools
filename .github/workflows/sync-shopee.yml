@@ -2,7 +2,7 @@ name: Shopee Daily Sync
 
 on:
   schedule:
-    - cron: "30 8 * * *"       # 16:30 Beijing
+    - cron: "30 8 * * *"
   workflow_dispatch:
 
 jobs:
@@ -10,8 +10,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
       - run: pip install requests
       - run: python scripts/gh_sync.py
         env:
-          PA_USER: ${{ secrets.PA_USER }}
+          SHOPEE_PARTNER_ID: ${{ secrets.SHOPEE_PARTNER_ID }}
+          SHOPEE_PARTNER_KEY: ${{ secrets.SHOPEE_PARTNER_KEY }}
+          SHOPEE_REFRESH_TOKEN: ${{ secrets.SHOPEE_REFRESH_TOKEN }}
+          SHOPEE_SHOP_ID: ${{ secrets.SHOPEE_SHOP_ID }}
           PA_API_TOKEN: ${{ secrets.PA_API_TOKEN }}
