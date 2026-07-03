@@ -114,14 +114,14 @@ def main():
     sku_qty = {}
     for order in new_orders:
         sn = order.get("order_sn")
-        detail = call_api("order/get_order_detail", {"order_sn_list": [sn]}, "GET")
+        detail = call_api("order/get_order_detail", {"order_sn_list": [sn], "response_optional_fields": "item_list"}, "GET")
         if detail.get("error"):
             print(f"  Order {sn} detail failed: {detail.get('error')}")
             continue
         items = detail.get("response", {}).get("order_list", [])
         for o in items:
             for item in o.get("item_list", []):
-                sku = item.get("item_sku", "").strip()
+                sku = item.get("model_sku", "").strip()
                 qty = item.get("model_quantity_purchased", 1)
                 if sku:
                     sku_qty[sku] = sku_qty.get(sku, 0) + qty
