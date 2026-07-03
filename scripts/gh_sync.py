@@ -45,8 +45,8 @@ def refresh_access_token():
     body = {"refresh_token": REFRESH_TOKEN, "partner_id": PARTNER_ID, "merchant_id": MERCHANT_ID}
     r = requests.post(f"{BASE_URL}/auth/access_token/get", params=params, json=body, timeout=30)
     data = r.json()
-    if data.get("error"):
-        print(f"Token refresh failed: {data['error']} - {data.get('message', '')}")
+    if data.get("error") or "response" not in data:
+        print(f"Token refresh failed: {data} (status {r.status_code})")
         return False
     ACCESS_TOKEN = data["response"]["access_token"]
     print(f"Access token refreshed (expires in {data['response'].get('expire_in', '?')}s)")
