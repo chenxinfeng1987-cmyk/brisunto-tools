@@ -60,9 +60,12 @@ def pa_download(path):
     return None
 
 def pa_upload(path, content):
-    r = requests.post(f"https://www.pythonanywhere.com/api/v0/user/{PA_USER}/files/path/{path}",
+    full_path = f"home/{PA_USER}/{path}"
+    r = requests.post(f"https://www.pythonanywhere.com/api/v0/user/{PA_USER}/files/path/{full_path}",
         files={"content": ("f", content.encode("utf-8"), "application/octet-stream")},
-        headers={"Authorization": f"Token {PA_API_TOKEN}"}, timeout=15)
+        headers={"Authorization": f"Token {PA_API_TOKEN}"}, timeout=30)
+    if not r.ok:
+        print(f"  UPLOAD FAILED [{r.status_code}]: {path}")
     return r.ok
 
 def main():
