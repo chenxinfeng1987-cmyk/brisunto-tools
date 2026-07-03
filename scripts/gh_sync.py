@@ -1,7 +1,7 @@
 """
-GitHub Actions: directly calls Shopee API and updates products.json on PA.
-Refreshes access token first, since it expires every 4 hours.
-IP whitelist is disabled on Shopee, so any IP can connect.
+GitHub Actions: deducts stock for READY_TO_SHIP (paid) Shopee orders.
+Tracks synced order IDs on PA to prevent double-deduction.
+Looks back 7 days to catch orders paid after creation.
 """
 import sys, os, json, requests, hashlib, hmac, time
 from datetime import datetime, timezone, timedelta
@@ -12,8 +12,8 @@ SHOP_ID = int(os.environ["SHOPEE_SHOP_ID"])
 PA_API_TOKEN = os.environ["PA_API_TOKEN"]
 PA_USER = "brisunto2026"
 REFRESH_TOKEN = os.environ["SHOPEE_REFRESH_TOKEN"]
-MERCHANT_ID = int(os.environ.get("SHOPEE_MERCHANT_ID", 3969241))
 BASE_URL = "https://openplatform.shopee.cn/api/v2"
+LOOKBACK_DAYS = 7
 
 ACCESS_TOKEN = None
 
@@ -52,6 +52,13 @@ def refresh_access_token():
     print(f"Access token refreshed (expires in {data.get('expire_in', '?')}s)")
     return True
 
+def pa_download(path):
+    r = requests.get(f"https://www.pythonanywhere.com/api/v0/user/{PA_USER}/files/path/home/{PA_USER}/{path}",
+        headers={"Authorization": f"Token {PA_API_TOKEN}"}, timeout=15)
+    if r.status_code == 200:
+        return r.text
+    return None
+
 def pa_upload(path, content):
     r = requests.post(f"https://www.pythonanywhere.com/api/v0/user/{PA_USER}/files/path/{path}",
         files={"content": ("f", content.encode("utf-8"), "application/octet-stream")},
@@ -63,25 +70,50 @@ def main():
         return False
 
     today = datetime.now()
-    ts_from = int(datetime(today.year, today.month, today.day).timestamp())
-    ts_to = int((today + timedelta(days=1)).timestamp())
+    ts_to = int(today.timestamp())
+    ts_from = int((today - timedelta(days=LOOKBACK_DAYS)).timestamp())
 
-    print(f"Fetching completed orders from {today.strftime('%Y-%m-%d')}...")
-    resp = call_api("order/get_order_list", {
-        "order_status": "COMPLETED", "time_range_field": "create_time",
-        "time_from": ts_from, "time_to": ts_to, "page_size": 100, "cursor": ""
-    })
-    if resp.get("error"):
-        print(f"API error: {resp['error']} - {resp.get('message', '')}")
-        return False
+    # Load already-synced order IDs from PA
+    synced = set()
+    raw = pa_download("inventory/synced_orders.json")
+    if raw:
+        try:
+            synced = set(json.loads(raw))
+            print(f"Loaded {len(synced)} previously synced orders")
+        except:
+            pass
+    if not synced:
+        print("No previous sync history, will process all orders")
 
-    orders = resp.get("response", {}).get("order_list", [])
-    print(f"Got {len(orders)} completed orders")
-    if not orders:
+    print(f"Fetching READY_TO_SHIP orders (last {LOOKBACK_DAYS} days)...")
+    cursor = ""
+    new_orders = []
+
+    while True:
+        resp = call_api("order/get_order_list", {
+            "order_status": "READY_TO_SHIP", "time_range_field": "create_time",
+            "time_from": ts_from, "time_to": ts_to, "page_size": 100, "cursor": cursor
+        })
+        if resp.get("error"):
+            print(f"API error: {resp['error']} - {resp.get('message', '')}")
+            return False
+
+        orders = resp.get("response", {}).get("order_list", [])
+        for o in orders:
+            sn = o.get("order_sn")
+            if sn and sn not in synced:
+                new_orders.append(o)
+        cursor = resp.get("response", {}).get("next_cursor", "")
+        if not cursor or not orders:
+            break
+
+    print(f"Found {len(new_orders)} new orders to process")
+    if not new_orders:
+        print("Nothing to sync")
         return True
 
     sku_qty = {}
-    for order in orders:
+    for order in new_orders:
         sn = order.get("order_sn")
         detail = call_api("order/get_order_detail", {"order_sn_list": [sn]}, "GET")
         if detail.get("error"):
@@ -100,15 +132,16 @@ def main():
         print("No SKUs to sync")
         return True
 
-    r = requests.get(f"https://www.pythonanywhere.com/api/v0/user/{PA_USER}/files/path/home/{PA_USER}/inventory/static/products.json",
-        headers={"Authorization": f"Token {PA_API_TOKEN}"})
-    if r.status_code != 200:
-        print(f"Failed to download products.json: {r.status_code}")
+    # Download current products.json from PA
+    raw = pa_download("inventory/static/products.json")
+    if not raw:
+        print("Failed to download products.json")
         return False
 
-    products = r.json()
+    products = json.loads(raw)
+    plist = products.get("products", products if isinstance(products, list) else [])
     updated = 0
-    for p in products:
+    for p in plist:
         item_sku = p.get("item", "").strip()
         if item_sku in sku_qty:
             sold = sku_qty[item_sku]
@@ -127,13 +160,18 @@ def main():
     else:
         print("No products to update")
 
+    # Save synced order IDs back to PA
+    all_synced = synced | {o.get("order_sn") for o in new_orders}
+    pa_upload("inventory/synced_orders.json", json.dumps(list(all_synced), ensure_ascii=False))
+    print(f"Saved {len(all_synced)} total synced order IDs")
+
+    # Monthly sales report
     ym = f"{today.year}-{today.month:02d}"
     report = f"sales_{ym}.csv"
-    r2 = requests.get(f"https://www.pythonanywhere.com/api/v0/user/{PA_USER}/files/path/home/{PA_USER}/{report}",
-        headers={"Authorization": f"Token {PA_API_TOKEN}"})
+    raw2 = pa_download(report)
     existing = {}
-    if r2.status_code == 200:
-        for line in r2.text.strip().split("\n")[1:]:
+    if raw2:
+        for line in raw2.strip().split("\n")[1:]:
             parts = line.split(",")
             if len(parts) >= 4:
                 existing[parts[0]] = {"qty": int(parts[2]), "orders": int(parts[3]), "name": parts[1]}
