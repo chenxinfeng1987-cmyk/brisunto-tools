@@ -131,7 +131,7 @@ def main():
         print("No SKUs to sync")
         return True
 
-    # Download current products.json from PA
+    # Download products.json to map SKU -> row number
     raw = pa_download("inventory/static/products.json")
     if not raw:
         print("Failed to download products.json")
@@ -139,25 +139,46 @@ def main():
 
     products = json.loads(raw)
     plist = products.get("products", products if isinstance(products, list) else [])
+    sku_to_row = {p.get("item", "").strip(): str(p.get("row", "")) for p in plist}
+
+    # Download stock.json (actual inventory used by Flask app)
+    raw_stock = pa_download("inventory/stock.json")
+    if not raw_stock:
+        # Initialize empty stock.json if not exists
+        STOCK = {}
+    else:
+        STOCK = json.loads(raw_stock)
+
     updated = 0
-    for p in plist:
-        item_sku = p.get("item", "").strip()
-        if item_sku in sku_qty:
-            sold = sku_qty[item_sku]
-            old_stock = p.get("stock", 0)
-            try:
-                new_stock = int(old_stock) - sold
-            except (ValueError, TypeError):
-                new_stock = 0
-            p["stock"] = new_stock
-            updated += 1
-            print(f"  {item_sku}: {old_stock} -> {new_stock} (-{sold})")
+    for sku, sold in sku_qty.items():
+        row = sku_to_row.get(sku)
+        if not row:
+            print(f"  SKIP {sku}: no row found in products.json")
+            continue
+        entry = STOCK.setdefault(row, {"qty": 0, "alert": 0, "location": ""})
+        old_qty = entry.get("qty", 0)
+        try:
+            new_qty = int(old_qty) - sold
+        except (ValueError, TypeError):
+            new_qty = 0 - sold
+        entry["qty"] = new_qty
+        updated += 1
+        print(f"  {sku} (row {row}): {old_qty} -> {new_qty} (-{sold})")
 
     if updated:
+        pa_upload("inventory/stock.json", json.dumps(STOCK, ensure_ascii=False, indent=2))
         pa_upload("inventory/static/products.json", json.dumps(products, ensure_ascii=False, indent=2))
-        print(f"Uploaded products.json ({updated} SKUs updated)")
+        print(f"Updated stock.json ({updated} SKUs) and products.json")
     else:
         print("No products to update")
+
+    # Reload PA web app so changes take effect
+    r = requests.post(f"https://www.pythonanywhere.com/api/v0/user/{PA_USER}/webapps/{PA_USER}.pythonanywhere.com/reload/",
+        headers={"Authorization": f"Token {PA_API_TOKEN}"}, timeout=15)
+    if r.ok:
+        print("Web app reloaded")
+    else:
+        print(f"Web app reload failed: {r.status_code}")
 
     # Save synced order IDs back to PA
     all_synced = synced | {o.get("order_sn") for o in new_orders}
