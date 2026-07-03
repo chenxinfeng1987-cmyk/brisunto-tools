@@ -42,14 +42,14 @@ def refresh_access_token():
     ts = int(time.time())
     sign = generate_sign(url_path, ts)
     params = {"partner_id": PARTNER_ID, "timestamp": ts, "sign": sign}
-    body = {"refresh_token": REFRESH_TOKEN, "partner_id": PARTNER_ID, "merchant_id": MERCHANT_ID}
+    body = {"refresh_token": REFRESH_TOKEN, "partner_id": PARTNER_ID, "shop_id": SHOP_ID}
     r = requests.post(f"{BASE_URL}/auth/access_token/get", params=params, json=body, timeout=30)
     data = r.json()
-    if data.get("error") or "response" not in data:
+    if "access_token" not in data:
         print(f"Token refresh failed: {data} (status {r.status_code})")
         return False
-    ACCESS_TOKEN = data["response"]["access_token"]
-    print(f"Access token refreshed (expires in {data['response'].get('expire_in', '?')}s)")
+    ACCESS_TOKEN = data["access_token"]
+    print(f"Access token refreshed (expires in {data.get('expire_in', '?')}s)")
     return True
 
 def pa_upload(path, content):
