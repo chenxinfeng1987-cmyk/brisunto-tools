@@ -26,16 +26,17 @@ def get_order_list(order_status="COMPLETED", create_time_from=None, create_time_
         create_time_to = now
     body = {
         "order_status": order_status,
-        "create_time_from": create_time_from,
-        "create_time_to": create_time_to,
+        "time_range_field": "create_time",
+        "time_from": create_time_from,
+        "time_to": create_time_to,
         "page_size": 100,
-        "page_number": 1,
+        "cursor": "",
     }
-    return call_api("order/get_order_list", body)
+    return call_api("order/get_order_list", body, method="GET")
 
 def get_order_detail(order_sn):
     body = {"order_sn_list": [order_sn]}
-    return call_api("order/get_order_detail", body)
+    return call_api("order/get_order_detail", body, method="GET")
 
 def load_json(path):
     with open(path, "r", encoding="utf-8") as f:
