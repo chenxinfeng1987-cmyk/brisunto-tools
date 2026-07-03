@@ -14,4 +14,4 @@ jobs:
       - run: python scripts/gh_sync.py
         env:
           PA_USER: ${{ secrets.PA_USER }}
-          PA_PASS: ${{ secrets.PA_PASS }}
+          PA_API_TOKEN: ${{ secrets.PA_API_TOKEN }}
